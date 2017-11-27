@@ -131,6 +131,10 @@ latewinter_troll.df <- read.csv(file = "Late Winter Troll ASL 2010-2017.csv", he
 str(latewinter_troll.df)
 addmargins(table(latewinter_troll.df$Year, latewinter_troll.df$Stat.Week))  # all samples
 
+# Add Month variable
+latewinter_troll.df$Date <- as.Date(latewinter_troll.df$Sample.Date, format = "%m/%d/%Y")
+latewinter_troll.df$Month <- format(x = latewinter_troll.df$Date, format = "%m")
+latewinter_troll.df$Month.abb <- factor(x = month.abb[as.numeric(latewinter_troll.df$Month)], levels = month.abb)
 
 ids <- sapply(paste0("KTROL", 10:17, "LW"), function(silly) {get(paste0(silly, ".gcl"))$attributes$FK_FISH_ID} )
 str(ids)
@@ -164,6 +168,9 @@ for(yr in 10:17){
   my.gcl$attributes$Age <- latewinter_troll.df$Age.European[match.yr]
   my.gcl$attributes$LengthType <- latewinter_troll.df$Length.Type[match.yr]
   my.gcl$attributes$Length <- latewinter_troll.df$Average.Length.mm[match.yr]
+  my.gcl$attributes$Date <- latewinter_troll.df$Date[match.yr]
+  my.gcl$attributes$Month <- latewinter_troll.df$Month[match.yr]
+  my.gcl$attributes$Month.abb <- latewinter_troll.df$Month.abb[match.yr]
   
   assign(x = paste0("match.20", yr), value = match.yr)
   assign(x = paste0("KTROL", yr, "LW.gcl"), value = my.gcl)
@@ -242,20 +249,25 @@ dput(x = LWint10_17_Strata_SampleSizes, file = "Objects/LWint10_17_Strata_Sample
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Save PostQC .gcl's as back-up:
-# dir.create("Raw genotypes/PooledCollections_PostQC")
+# dir.create("Raw genotypes/PooledCollections_PostQC_Metadata")
 invisible(sapply(LWint10_17_Strata, function(silly) {
-  dput(x = get(paste(silly, ".gcl", sep = '')), file = paste0("Raw genotypes/PooledCollections_PostQC/" , silly, ".txt"))
+  dput(x = get(paste(silly, ".gcl", sep = '')), file = paste0("Raw genotypes/PooledCollections_PostQC_Metadata/" , silly, ".txt"))
 } )); beep(8)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Add Genotyped TRUE/FALSE to ASL.df
-ids.genotpyed <- sapply(paste0("KTROL", 10:17, "LW"), function(silly) {get(paste0(silly, ".gcl"))$attributes$FK_FISH_ID} )
-dput(x = ids.genotpyed, file = "Objects/ids.genotyped.txt")
+ids.genotyped <- sapply(paste0("KTROL", 10:17, "LW"), function(silly) {get(paste0(silly, ".gcl"))$attributes$FK_FISH_ID} )
+dput(x = ids.genotyped, file = "Objects/ids.genotyped.txt")
 
 
 latewinter_troll.df$Genotyped <- latewinter_troll.df$Dna.Specimen.No %in% unlist(ids.genotpyed)
 write.csv(x = latewinter_troll.df, file = "Late Winter Troll ASL 2010-2017_new.csv", row.names = FALSE)
+
+# Pivot of # genotyped by year by month
+require(reshape)
+cast(data = latewinter_troll.df, Year ~ Month.abb, value = "Genotyped", subset = Genotyped == TRUE, margins = TRUE)
+dput(x = latewinter_troll.df, file = "Objects/latewinter_troll.df.txt")
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -263,7 +275,7 @@ write.csv(x = latewinter_troll.df, file = "Late Winter Troll ASL 2010-2017_new.c
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 rm(list = ls(all = TRUE))
-setwd("V:/Analysis/1_SEAK/Chinook/Mixture/Spring Troll 2010-2017/")
+setwd("V:/Analysis/1_SEAK/Chinook/Mixture/Late Winter Troll 2010-2017/")
 # This sources all of the new GCL functions to this workspace
 source("C:/Users/krshedd/Documents/R/Functions.GCL.R")
 source("H:/R Source Scripts/Functions.GCL_KS.R")
@@ -275,6 +287,298 @@ SEAKobjects
 
 invisible(sapply(SEAKobjects, function(objct) {assign(x = unlist(strsplit(x = objct, split = ".txt")), value = dget(file = paste(getwd(), "Objects", objct, sep = "/")), pos = 1) })); beep(2)
 
-## Get un-altered mixtures
-invisible(sapply(paste0("KTROL", 10:17, "SP"), function(silly) {assign(x = paste0(silly, ".gcl"), value = dget(file = paste0("Raw genotypes/PooledCollections_PostQC/", silly, ".txt")), pos = 1)} )); beep(2)
+## Get the postQC_metadata mixtures
+invisible(sapply(LWint10_17_Strata, function(silly) {assign(x = paste0(silly, ".gcl"), value = dget(file = paste0("Raw genotypes/PooledCollections_PostQC_Metadata/", silly, ".txt")), pos = 1)} )); beep(2)
 objects(pattern = "\\.gcl")
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#### Create Mixtures ####
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Pivot of years by mixtures with NA
+addmargins(t(sapply(as.character(10:17), function(yr) {
+  my.gcl <- get(paste0("KTROL", yr, "LW.gcl"))
+  table(my.gcl$attributes$Month.abb, useNA = "always")
+} )))
+
+
+# Add new factor with mixtures
+for(yr in 10:17){
+  my.gcl <- get(paste0("KTROL", yr, "LW.gcl"))
+  
+  my.gcl$attributes$Mixture <- NA
+  my.gcl$attributes$Mixture[my.gcl$attributes$Month.abb %in% "Jan"] <- "Jan"
+  my.gcl$attributes$Mixture[my.gcl$attributes$Month.abb %in% "Feb"] <- "Feb"
+  my.gcl$attributes$Mixture[my.gcl$attributes$Month.abb %in% "Mar"] <- "Mar"
+  my.gcl$attributes$Mixture[my.gcl$attributes$Month.abb %in% c("Apr", "May")] <- "Apr"
+
+  my.gcl$attributes$Mixture <- factor(x = my.gcl$attributes$Mixture, levels = month.abb[1:4])
+  
+  assign(x = paste0("KTROL", yr, "LW.gcl"), value = my.gcl)
+}
+
+
+# Pivot of years by mixtures with NA
+
+mixture.n.mat <- t(sapply(as.character(10:17), function(yr) {
+  my.gcl <- get(paste0("KTROL", yr, "LW.gcl"))
+  table(my.gcl$attributes$Mixture, useNA = "always")
+} ))
+
+addmargins(mixture.n.mat)
+
+
+mixtures.yr <- apply(mixture.n.mat, 1, function(yr) {which(yr > 100)} )
+dput(x = mixtures.yr, file = "Objects/mixtures.yr.txt")
+
+mixtures <- levels(KTROL10LW.gcl$attributes$Mixture)
+dput(x = mixtures, file = "Objects/mixtures.txt")
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# dir.create("BAYES")
+# dir.create("BAYES/Mixture")
+
+# Loop over years and mixtures
+for(yr in 10:17){
+  my.gcl <- get(paste0("KTROL", yr, "LW.gcl"))
+  
+  for(mix in mixtures.yr[[as.character(yr)]]) {
+    IDs <- list("my" = na.omit(AttributesToIDs.GCL(silly = "my", attribute = "Mixture", matching = mixtures[mix])))
+    if(length(IDs[["my"]])) {
+      invisible(CreateMixture.GCL(sillys = "my", loci = GAPSLoci_reordered, IDs = IDs, 
+                                  mixname = paste0("AllQuad", mixtures[mix], "Troll_20", yr), 
+                                  dir = "BAYES/Mixture/", type = "BAYES", PT = FALSE))
+    }  # if IDS
+  }  # mixture within year
+  
+}  # year
+
+all.mixtures <- unlist(sapply(names(mixtures.yr), function(yr) {paste0("AllQuad", names(mixtures.yr[[yr]]), "Troll_20", yr)} ))
+all.mixtures <- unname(all.mixtures)
+dput(x = all.mixtures, file = "Objects/all.mixtures.txt")
+
+# Double check mixture files
+
+sapply(list.files(path = "BAYES/Mixture/", full.names = TRUE), function(fle) {nrow(read.table(file = fle, header = FALSE))} )
+mixture.n.mat
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# dir.create("BAYES/Baseline")
+file.copy(from = "V:/Analysis/1_SEAK/Chinook/Mixture/SEAK17/BAYES/Baseline/GAPS357pops13loci.bse", to = "BAYES/Baseline/")
+file.copy(from = "V:/Analysis/1_SEAK/Chinook/Mixture/SEAK17/Objects/GroupVec26RG_357.txt", to = "Objects")
+file.copy(from = "V:/Analysis/1_SEAK/Chinook/Mixture/SEAK17/Objects/GroupNames26.txt", to = "Objects")
+file.copy(from = "V:/Analysis/1_SEAK/Chinook/Mixture/SEAK17/Objects/SEAKPops357.txt", to = "Objects")
+file.copy(from = "V:/Analysis/1_SEAK/Chinook/Mixture/SEAK17/Objects/GAPS357PopsInits.txt", to = "Objects")
+file.copy(from = "V:/Analysis/1_SEAK/Chinook/Mixture/SEAK17/Objects/WASSIPSockeyeSeeds.txt", to = "Objects")
+file.copy(from = "V:/Analysis/1_SEAK/Chinook/Mixture/SEAK17/Objects/mixfortran.txt", to = "Objects")
+file.copy(from = "V:/Analysis/1_SEAK/Chinook/Mixture/SEAK17/Objects/bayesfortran_357.txt", to = "Objects")
+file.copy(from = "V:/Analysis/1_SEAK/Chinook/Mixture/Spring Troll 2010-2017/Objects/GAPS357PopFlatPrior.txt", to = "Objects")
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# dir.create("BAYES/Control")
+
+SEAKobjects <- list.files(path = "Objects", recursive = FALSE)
+invisible(sapply(SEAKobjects, function(objct) {assign(x = unlist(strsplit(x = objct, split = ".txt")), value = dget(file = paste(getwd(), "Objects", objct, sep = "/")), pos = 1) })); rm(SEAKobjects); beep(2)
+
+sapply(all.mixtures, function(Mix) {
+  invisible(CreateControlFile.GCL(sillyvec = SEAKPops357, loci = GAPSLoci_reordered, mixname = Mix, basename = "GAPS357pops13loci", suffix = "", nreps = 40000, nchains = 5,
+                                  groupvec = GroupVec26RG_357, priorvec = GAPS357PopFlatPrior, initmat = GAPS357PopsInits, dir = "BAYES/Control",
+                                  seeds = WASSIPSockeyeSeeds, thin = c(1, 1, 100), mixfortran = mixfortran, basefortran = bayesfortran_357, switches = "F T F T T T F"))
+} )
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# dir.create("BAYES/Output")
+sapply(all.mixtures, function(Mix) {
+  invisible(dir.create(path = paste0("BAYES/Output/", Mix)))
+})
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#### Summarize BAYES ####
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+LWint10_17_26RG_Estimates <- 
+  CustomCombineBAYESOutput.GCL(groupvec = 1:26, groupnames = GroupNames26, maindir = "BAYES/Output", mixvec = all.mixtures,
+                               prior = '', ext = "RGN", nchains = 5, burn = 0.5, alpha = 0.1, PosteriorOutput = FALSE)
+# dir.create("Estimates objects")
+dput(x = LWint10_17_26RG_Estimates, file = "Estimates objects/LWint10_17_26RG_Estimates.txt")
+sapply(LWint10_17_26RG_Estimates, function(mix) {table(mix[, "GR"] > 1.2)})  # March2012 and March 2017 had 1) RG each over 1.2
+sapply(c("AllQuadMarTroll_2012", "AllQuadMarTroll_2017"), function(mix) {LWint10_17_26RG_Estimates[[mix]][, "GR"]})
+
+
+file.copy(from = "V:/Analysis/1_SEAK/Chinook/Mixture/SEAK17/Objects/GroupNames4.txt", to = "Objects")
+file.copy(from = "V:/Analysis/1_SEAK/Chinook/Mixture/SEAK17/Objects/GroupNames4Pub.txt", to = "Objects")
+file.copy(from = "V:/Analysis/1_SEAK/Chinook/Mixture/SEAK17/Objects/GroupVec4.txt", to = "Objects")
+
+LWint10_17_4RG_Estimates <- 
+  CustomCombineBAYESOutput.GCL(groupvec = GroupVec4, groupnames = GroupNames4Pub, maindir = "BAYES/Output", mixvec = all.mixtures,
+                               prior = '', ext = "RGN", nchains = 5, burn = 0.5, alpha = 0.1, PosteriorOutput = FALSE)
+dput(x = LWint10_17_4RG_Estimates, file = "Estimates objects/LWint10_17_4RG_Estimates.txt")
+LWint10_17_4RG_Estimates <- dget(file = "Estimates objects/LWint10_17_4RG_Estimates.txt")
+
+sapply(LWint10_17_4RG_Estimates, function(mix) {table(mix[, "GR"] > 1.2)})
+sapply(LWint10_17_4RG_Estimates, function(mix) {mix[c("Alaska", "TBR"), "mean"]})
+
+sapply(LWint10_17_4RG_Estimates, function(mix) {mix[, "mean"]} )
+sapply(LWint10_17_4RG_Estimates, function(mix) {mix[, "sd"] / mix[, "mean"]} )  # CV
+sapply(LWint10_17_4RG_Estimates, function(mix) {sum(mix[, "sd"] / mix[, "mean"] < 0.20)} )  # how many RGs with CV < 20%
+sapply(LWint10_17_4RG_Estimates, function(mix) {mix[, "95%"] - mix[, "5%"]} )  # 90% CI range
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#### Read in Harvest and Sample Size Data ####
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+require(xlsx)
+harvest.df <- read.xlsx(file = "Late Winter Troll ASL 2010-2017.xlsx", sheetName = "CE000678", startRow = 23, header = TRUE)
+str(harvest.df)
+
+harvest.df$Mixture <- NA
+harvest.df$Mixture[harvest.df$District %in% 101:102] <- "101/102"
+harvest.df$Mixture[harvest.df$District %in% 103] <- "103"
+harvest.df$Mixture[harvest.df$District %in% 106:108 & harvest.df$Area.Value != 10643] <- "106/107/108"
+harvest.df$Mixture[harvest.df$District %in% c(109:110, 112) & harvest.df$Area.Value != 11265] <- "109/110/112"
+harvest.df$Mixture[harvest.df$District %in% 113] <- "113"
+harvest.df$Mixture[harvest.df$District %in% 114 | harvest.df$Area.Value %in% c(11265, 11395, 11397)] <- "114"
+harvest.df$Mixture[harvest.df$District %in% 183] <- "183"
+
+harvest.df$Mixture <- factor(x = harvest.df$Mixture, levels = c("101/102", "103", "106/107/108", "109/110/112", "113", "114", "183"))
+
+dput(x = harvest.df, file = "Objects/harvest.df.txt")
+
+require(reshape)
+harvest_mix.df <- aggregate(N.Catch ~ Year + Mixture, data = harvest.df, sum)
+str(harvest_mix.df)
+cast(harvest_mix.df, Year ~ Mixture, value = "N.Catch")
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Sample sizes
+all.mixtures.samplesize <- sapply(all.mixtures, function(mix) {dim(read.table(file = paste0("BAYES/Mixture/", mix, ".mix")))[1]} )
+dput(x = all.mixtures.samplesize, file = "Objects/all.mixtures.samplesize.txt")
+
+mixtures.names
+mixtures.names2 <- names(mixtures.names)
+names(mixtures.names2) <- mixtures.names
+
+mixtures.df <- as.data.frame(t(sapply(all.mixtures, function(mix) {unlist(strsplit(x = mix, split = "_"))} )), stringsAsFactors = FALSE)
+names(mixtures.df) <- c("Mixname", "Year")
+mixtures.df$Year <- as.numeric(mixtures.df$Year)
+mixtures.df$Full.Mixname <- all.mixtures
+mixtures.df$Mixture <- factor(x = mixtures.names2[mixtures.df$Mixname], levels = levels(harvest_mix.df$Mixture))
+mixtures.df$n <- all.mixtures.samplesize
+
+dput(x = mixtures.df, file = "Objects/mixtures.df.txt")
+
+
+str(mixtures.df)
+
+all.mixtures.n100 <- names(which(all.mixtures.samplesize >= 100))
+dput(x = all.mixtures.n100, file = "Objects/all.mixtures.n100.txt")
+
+# Subset data for n >= 100
+Spring10_17_4RG_Estimates_n100 <- Spring10_17_4RG_Estimates[all.mixtures.n100]
+dput(x = Spring10_17_4RG_Estimates_n100, file = "Estimates objects/Spring10_17_4RG_Estimates_n100.txt")
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Merge harvest and sample size
+spring.estimates.df <- merge(x = harvest_mix.df, y = mixtures.df, by = c("Mixture", "Year"), all = FALSE)
+spring.estimates.df$Alaska.mean.p <- sapply(Spring10_17_4RG_Estimates, function(mix) {mix["Alaska", "mean"]})
+spring.estimates.df$TBR.mean.p <- sapply(Spring10_17_4RG_Estimates, function(mix) {mix["TBR", "mean"]})
+spring.estimates.df$Alaska.mean.C <- spring.estimates.df$Alaska.mean.p * spring.estimates.df$N.Catch
+spring.estimates.df$TBR.mean.C <- spring.estimates.df$TBR.mean.p * spring.estimates.df$N.Catch
+
+round(cast(spring.estimates.df, Year ~ Mixture, value = "Alaska.mean.C"))
+round(cast(spring.estimates.df, Year ~ Mixture, value = "TBR.mean.C"))
+round(cast(spring.estimates.df, Year ~ Mixture, value = "n"))
+
+dput(x = spring.estimates.df, file = "Objects/spring.estimates.df.txt")
+
+harvest <- setNames(object = spring.estimates.df$N.Catch, nm = spring.estimates.df$Full.Mixname)
+dput(x = harvest, file = "Objects/harvest.txt")
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Subset to only mixtures with >= 100 fish
+spring.estimates.n100.df <- spring.estimates.df
+spring.estimates.n100.df[spring.estimates.n100.df$n < 100, c("Alaska.mean.p", "Alaska.mean.C", "TBR.mean.p", "TBR.mean.C")] <- NA
+
+# Heatmap of total Catch
+require(lattice)
+new.colors <- colorRampPalette(c("white", "darkgreen"))
+data.mat <- as.matrix(round(cast(spring.estimates.n100.df, Year ~ Mixture, value = "N.Catch")))
+# data.mat[is.na(data.mat)] <- 0
+levelplot(data.mat, 
+          col.regions = new.colors, 
+          at = seq(from = 0, to = max(data.mat, na.rm = TRUE), length.out = 100), 
+          main = "Total Catch", xlab = "Year", ylab = "District Area", 
+          scales = list(x = list(rot = 90)), 
+          aspect = "fill",
+          panel = function(...) {
+            panel.fill("black")
+            panel.levelplot(...)}
+)  # aspect = "iso" will make squares
+
+
+# Heatmap of mean Alaska
+require(lattice)
+new.colors <- colorRampPalette(c("white", "darkblue"))
+data.mat <- as.matrix(cast(spring.estimates.n100.df, Year ~ Mixture, value = "Alaska.mean.p")) * 100
+levelplot(data.mat, 
+          col.regions = new.colors, 
+          at = seq(from = 0, to = 100, length.out = 100), 
+          main = "Mean Alaska %", xlab = "Year", ylab = "District Area", 
+          scales = list(x = list(rot = 90)), 
+          aspect = "fill", 
+          panel = function(...) {
+            panel.fill("black")
+            panel.levelplot(...)}
+)  # aspect = "iso" will make squares
+
+# Heatmap of mean TBR %
+require(lattice)
+new.colors <- colorRampPalette(c("white", "darkblue"))
+data.mat <- as.matrix(cast(spring.estimates.n100.df, Year ~ Mixture, value = "TBR.mean.p")) * 100
+levelplot(data.mat, 
+          col.regions = new.colors, 
+          at = seq(from = 0, to = 100, length.out = 100), 
+          main = "Mean TBR %", xlab = "Year", ylab = "District Area", 
+          scales = list(x = list(rot = 90)), 
+          aspect = "fill", 
+          panel = function(...) {
+            panel.fill("black")
+            panel.levelplot(...)}
+)  # aspect = "iso" will make squares
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#### Create 4RG Summary Tables ####
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# dir.create("Estimates tables")
+require(xlsx)
+
+EstimatesStats <- Spring10_17_4RG_Estimates_n100
+SampSizes <- all.mixtures.samplesize
+HarvestVec <- harvest
+PubNames <- setNames(object = paste("Spring Troll", spring.estimates.df$Year, "District(s)", spring.estimates.df$Mixture),
+                     nm = spring.estimates.df$Full.Mixname)
+
+for(mix in all.mixtures.n100) {
+  
+  TableX <- matrix(data = "", nrow = 7, ncol = 7)
+  TableX[1, 1] <- paste0(PubNames[mix], " (n=", SampSizes[mix], ", catch=", formatC(x = HarvestVec[mix], digits = 0, big.mark = ",", format = "f"), ")")
+  TableX[2, 6] <- "90% CI"
+  TableX[3, 2:7] <- c("Reporting Group", "Mean", "SD", "Median", "5%", "95%")
+  TableX[4:7, 1] <- 1:4
+  TableX[4:7, 2] <- rownames(EstimatesStats[[mix]])
+  TableX[4:7, 3:7] <- formatC(x = EstimatesStats[[mix]][, c("mean", "sd", "median", "5%", "95%")], digits = 3, format = "f")
+  
+  write.xlsx(x = TableX, file = "Estimates tables/SpringTroll2017_4RG_Estimates.xlsx",
+             col.names = FALSE, row.names = FALSE, sheetName = paste(mix, " 4RG"), append = TRUE)
+  
+}
+
+
+# save.image("SpringTroll2010-2017.RData")
