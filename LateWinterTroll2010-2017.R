@@ -10,7 +10,7 @@ date()
 # commercial late winter troll harvests from 2010-2017 using the GAPS3.0
 # baseline containing 357 populations in 26 reporting groups characterized by 
 # 13 uSATs. All mixtures are to be analyzed with the program BAYES.
-# This re-analysis is similar to what was done with Spring Troll, this is to
+# This re-analysis is similar to what was done with LWint Troll, this is to
 # aid in the development of action plans for the new stocks of concern in 2018
 # BoF.
 
@@ -425,7 +425,7 @@ sapply(LWint10_17_4RG_Estimates, function(mix) {mix[c("Alaska", "TBR"), "mean"]}
 
 sapply(LWint10_17_4RG_Estimates, function(mix) {mix[, "mean"]} )
 sapply(LWint10_17_4RG_Estimates, function(mix) {mix[, "sd"] / mix[, "mean"]} )  # CV
-sapply(LWint10_17_4RG_Estimates, function(mix) {sum(mix[, "sd"] / mix[, "mean"] < 0.20)} )  # how many RGs with CV < 20%
+table(sapply(LWint10_17_4RG_Estimates, function(mix) {sum(mix[, "sd"] / mix[, "mean"] < 0.20)} ))  # how many RGs with CV < 20%
 sapply(LWint10_17_4RG_Estimates, function(mix) {mix[, "95%"] - mix[, "5%"]} )  # 90% CI range
 
 
@@ -433,26 +433,20 @@ sapply(LWint10_17_4RG_Estimates, function(mix) {mix[, "95%"] - mix[, "5%"]} )  #
 #### Read in Harvest and Sample Size Data ####
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 require(xlsx)
-harvest.df <- read.xlsx(file = "Late Winter Troll ASL 2010-2017.xlsx", sheetName = "CE000678", startRow = 23, header = TRUE)
-str(harvest.df)
+# harvest.df <- read.xlsx(file = "Late Winter Troll ASL 2010-2017.xlsx", sheetName = "CE000678", startRow = 23, header = TRUE)
+str(harvest.df)  # Not helpful as it is only harvest by period or harvest by SW, need harvest by month.
 
-harvest.df$Mixture <- NA
-harvest.df$Mixture[harvest.df$District %in% 101:102] <- "101/102"
-harvest.df$Mixture[harvest.df$District %in% 103] <- "103"
-harvest.df$Mixture[harvest.df$District %in% 106:108 & harvest.df$Area.Value != 10643] <- "106/107/108"
-harvest.df$Mixture[harvest.df$District %in% c(109:110, 112) & harvest.df$Area.Value != 11265] <- "109/110/112"
-harvest.df$Mixture[harvest.df$District %in% 113] <- "113"
-harvest.df$Mixture[harvest.df$District %in% 114 | harvest.df$Area.Value %in% c(11265, 11395, 11397)] <- "114"
-harvest.df$Mixture[harvest.df$District %in% 183] <- "183"
-
-harvest.df$Mixture <- factor(x = harvest.df$Mixture, levels = c("101/102", "103", "106/107/108", "109/110/112", "113", "114", "183"))
-
-dput(x = harvest.df, file = "Objects/harvest.df.txt")
+harvestbymonth.df <- read.xlsx(file = "Late Winter Troll ASL 2010-2017.xlsx", sheetName = "HarvestByMonth", header = TRUE)
+str(harvestbymonth.df)
 
 require(reshape)
-harvest_mix.df <- aggregate(N.Catch ~ Year + Mixture, data = harvest.df, sum)
-str(harvest_mix.df)
-cast(harvest_mix.df, Year ~ Mixture, value = "N.Catch")
+harvest.df <- melt(harvestbymonth.df, id = c("Year"))
+names(harvest.df) <- c("Year", "Month", "N.Catch")
+
+harvest.df$Mixture <- paste0("AllQuad", harvest.df$Month, "Troll_", harvest.df$Year)
+dput(x = harvest.df, file = "Objects/harvest.df.txt")
+
+cast(harvest.df, Year ~ Month, value = "N.Catch")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Sample sizes
@@ -467,7 +461,7 @@ mixtures.df <- as.data.frame(t(sapply(all.mixtures, function(mix) {unlist(strspl
 names(mixtures.df) <- c("Mixname", "Year")
 mixtures.df$Year <- as.numeric(mixtures.df$Year)
 mixtures.df$Full.Mixname <- all.mixtures
-mixtures.df$Mixture <- factor(x = mixtures.names2[mixtures.df$Mixname], levels = levels(harvest_mix.df$Mixture))
+# mixtures.df$Mixture <- factor(x = mixtures.names2[mixtures.df$Mixname], levels = levels(harvest_mix.df$Mixture))
 mixtures.df$n <- all.mixtures.samplesize
 
 dput(x = mixtures.df, file = "Objects/mixtures.df.txt")
@@ -479,40 +473,50 @@ all.mixtures.n100 <- names(which(all.mixtures.samplesize >= 100))
 dput(x = all.mixtures.n100, file = "Objects/all.mixtures.n100.txt")
 
 # Subset data for n >= 100
-Spring10_17_4RG_Estimates_n100 <- Spring10_17_4RG_Estimates[all.mixtures.n100]
-dput(x = Spring10_17_4RG_Estimates_n100, file = "Estimates objects/Spring10_17_4RG_Estimates_n100.txt")
+LWint10_17_4RG_Estimates_n100 <- LWint10_17_4RG_Estimates[all.mixtures.n100]
+dput(x = LWint10_17_4RG_Estimates_n100, file = "Estimates objects/LWint10_17_4RG_Estimates_n100.txt")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Merge harvest and sample size
-spring.estimates.df <- merge(x = harvest_mix.df, y = mixtures.df, by = c("Mixture", "Year"), all = FALSE)
-spring.estimates.df$Alaska.mean.p <- sapply(Spring10_17_4RG_Estimates, function(mix) {mix["Alaska", "mean"]})
-spring.estimates.df$TBR.mean.p <- sapply(Spring10_17_4RG_Estimates, function(mix) {mix["TBR", "mean"]})
-spring.estimates.df$Alaska.mean.C <- spring.estimates.df$Alaska.mean.p * spring.estimates.df$N.Catch
-spring.estimates.df$TBR.mean.C <- spring.estimates.df$TBR.mean.p * spring.estimates.df$N.Catch
+latewinter.estimates.df <- merge(x = harvest.df, y = mixtures.df, by.x = "Mixture", by.y = "Full.Mixname", all = TRUE)
+str(latewinter.estimates.df)
 
-round(cast(spring.estimates.df, Year ~ Mixture, value = "Alaska.mean.C"))
-round(cast(spring.estimates.df, Year ~ Mixture, value = "TBR.mean.C"))
-round(cast(spring.estimates.df, Year ~ Mixture, value = "n"))
+latewinter.estimates.df$Alaska.mean.p <- sapply(latewinter.estimates.df$Mixture, function(mix) {
+  ifelse(mix %in% all.mixtures, LWint10_17_4RG_Estimates[[mix]]["Alaska", "mean"], NA)} )
+latewinter.estimates.df$TBR.mean.p <- sapply(latewinter.estimates.df$Mixture, function(mix) {
+  ifelse(mix %in% all.mixtures, LWint10_17_4RG_Estimates[[mix]]["TBR", "mean"], NA)} )
+latewinter.estimates.df$Alaska.mean.C <- latewinter.estimates.df$Alaska.mean.p * latewinter.estimates.df$N.Catch
+latewinter.estimates.df$TBR.mean.C <- latewinter.estimates.df$TBR.mean.p * latewinter.estimates.df$N.Catch
+names(latewinter.estimates.df)[2] <- "Year"
+latewinter.estimates.df$Canada.mean.p <- sapply(latewinter.estimates.df$Mixture, function(mix) {
+  ifelse(mix %in% all.mixtures, LWint10_17_4RG_Estimates[[mix]]["Canada", "mean"], NA)} )
+latewinter.estimates.df$US_South.mean.p <- sapply(latewinter.estimates.df$Mixture, function(mix) {
+  ifelse(mix %in% all.mixtures, LWint10_17_4RG_Estimates[[mix]]["US South", "mean"], NA)} )
 
-dput(x = spring.estimates.df, file = "Objects/spring.estimates.df.txt")
+round(cast(latewinter.estimates.df, Year ~ Month, value = "Alaska.mean.C"))
+round(cast(latewinter.estimates.df, Year ~ Month, value = "TBR.mean.C"))
+round(cast(latewinter.estimates.df, Year ~ Month, value = "n"))
 
-harvest <- setNames(object = spring.estimates.df$N.Catch, nm = spring.estimates.df$Full.Mixname)
+dput(x = latewinter.estimates.df, file = "Objects/latewinter.estimates.df.txt")
+
+harvest <- setNames(object = latewinter.estimates.df$N.Catch, nm = latewinter.estimates.df$Mixture)
 dput(x = harvest, file = "Objects/harvest.txt")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Subset to only mixtures with >= 100 fish
-spring.estimates.n100.df <- spring.estimates.df
-spring.estimates.n100.df[spring.estimates.n100.df$n < 100, c("Alaska.mean.p", "Alaska.mean.C", "TBR.mean.p", "TBR.mean.C")] <- NA
+# Already done, didn't run any mixtures < 100 fish
+# latewinter.estimates.n100.df <- latewinter.estimates.df
+# latewinter.estimates.n100.df[latewinter.estimates.n100.df$n < 100, c("Alaska.mean.p", "Alaska.mean.C", "TBR.mean.p", "TBR.mean.C")] <- NA
 
 # Heatmap of total Catch
 require(lattice)
 new.colors <- colorRampPalette(c("white", "darkgreen"))
-data.mat <- as.matrix(round(cast(spring.estimates.n100.df, Year ~ Mixture, value = "N.Catch")))
+data.mat <- as.matrix(round(cast(latewinter.estimates.df, Year ~ Month, value = "N.Catch")))
 # data.mat[is.na(data.mat)] <- 0
 levelplot(data.mat, 
           col.regions = new.colors, 
           at = seq(from = 0, to = max(data.mat, na.rm = TRUE), length.out = 100), 
-          main = "Total Catch", xlab = "Year", ylab = "District Area", 
+          main = "Total Catch", xlab = "Year", ylab = "Month", 
           scales = list(x = list(rot = 90)), 
           aspect = "fill",
           panel = function(...) {
@@ -524,11 +528,11 @@ levelplot(data.mat,
 # Heatmap of mean Alaska
 require(lattice)
 new.colors <- colorRampPalette(c("white", "darkblue"))
-data.mat <- as.matrix(cast(spring.estimates.n100.df, Year ~ Mixture, value = "Alaska.mean.p")) * 100
+data.mat <- as.matrix(cast(latewinter.estimates.df, Year ~ Month, value = "Alaska.mean.p")) * 100
 levelplot(data.mat, 
           col.regions = new.colors, 
           at = seq(from = 0, to = 100, length.out = 100), 
-          main = "Mean Alaska %", xlab = "Year", ylab = "District Area", 
+          main = "Mean Alaska %", xlab = "Year", ylab = "Month", 
           scales = list(x = list(rot = 90)), 
           aspect = "fill", 
           panel = function(...) {
@@ -539,11 +543,11 @@ levelplot(data.mat,
 # Heatmap of mean TBR %
 require(lattice)
 new.colors <- colorRampPalette(c("white", "darkblue"))
-data.mat <- as.matrix(cast(spring.estimates.n100.df, Year ~ Mixture, value = "TBR.mean.p")) * 100
+data.mat <- as.matrix(cast(latewinter.estimates.df, Year ~ Month, value = "TBR.mean.p")) * 100
 levelplot(data.mat, 
           col.regions = new.colors, 
           at = seq(from = 0, to = 100, length.out = 100), 
-          main = "Mean TBR %", xlab = "Year", ylab = "District Area", 
+          main = "Mean TBR %", xlab = "Year", ylab = "Month", 
           scales = list(x = list(rot = 90)), 
           aspect = "fill", 
           panel = function(...) {
@@ -559,11 +563,11 @@ levelplot(data.mat,
 # dir.create("Estimates tables")
 require(xlsx)
 
-EstimatesStats <- Spring10_17_4RG_Estimates_n100
+EstimatesStats <- LWint10_17_4RG_Estimates_n100
 SampSizes <- all.mixtures.samplesize
 HarvestVec <- harvest
-PubNames <- setNames(object = paste("Spring Troll", spring.estimates.df$Year, "District(s)", spring.estimates.df$Mixture),
-                     nm = spring.estimates.df$Full.Mixname)
+PubNames <- setNames(object = paste("Late Winter Troll", month.name[latewinter.estimates.df$Month], latewinter.estimates.df$Year, "All Quadrants"),
+                     nm = latewinter.estimates.df$Mixture)
 
 for(mix in all.mixtures.n100) {
   
@@ -575,10 +579,10 @@ for(mix in all.mixtures.n100) {
   TableX[4:7, 2] <- rownames(EstimatesStats[[mix]])
   TableX[4:7, 3:7] <- formatC(x = EstimatesStats[[mix]][, c("mean", "sd", "median", "5%", "95%")], digits = 3, format = "f")
   
-  write.xlsx(x = TableX, file = "Estimates tables/SpringTroll2017_4RG_Estimates.xlsx",
+  write.xlsx(x = TableX, file = "Estimates tables/LWintTroll2017_4RG_Estimates.xlsx",
              col.names = FALSE, row.names = FALSE, sheetName = paste(mix, " 4RG"), append = TRUE)
   
 }
 
 
-# save.image("SpringTroll2010-2017.RData")
+# save.image("LWintTroll2010-2017.RData")
