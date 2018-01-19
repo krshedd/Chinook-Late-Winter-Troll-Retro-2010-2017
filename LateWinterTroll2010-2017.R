@@ -447,6 +447,9 @@ harvest.df$Mixture <- paste0("AllQuad", harvest.df$Month, "Troll_", harvest.df$Y
 dput(x = harvest.df, file = "Objects/harvest.df.txt")
 
 cast(harvest.df, Year ~ Month, value = "N.Catch")
+cast(latewinter_troll.df, Year ~ Month.abb, value = "Genotyped", fun.aggregate = sum)
+
+lwint_harvest.df <- read.xlsx(file = "Late Winter Troll ASL 2010-2017.xlsx", sheetName = "CE000678", startRow = 23, header = TRUE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Sample sizes
